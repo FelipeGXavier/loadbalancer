@@ -70,6 +70,10 @@ func addressContainsLoopbackWithTargetPort(serverList []string, loadBalancerServ
 	return false
 }
 
+func addressIsHttp(url *url.URL) bool {
+	return url.Scheme == "http" || url.Scheme == "https"
+}
+
 func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port int, options ...LoadBalancerOption) (LoadBalancer, error) {
 	if len(serverList) == 0 {
 		return LoadBalancer{}, errors.New("please provide one or more backends to load balance")
@@ -87,7 +91,11 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 	for _, tok := range tokens {
 		serverUrl, err := url.Parse(tok)
 		if err != nil {
-			log.Fatalf("Error while parsing the server url %s %v", tok, err)
+			log.Fatalf("error while parsing the server url %s %v", tok, err)
+			continue
+		}
+		if !addressIsHttp(serverUrl) {
+			log.Printf("backend server must be http(s) %s %v", tok, err)
 			continue
 		}
 		proxy := httputil.NewSingleHostReverseProxy(serverUrl)
