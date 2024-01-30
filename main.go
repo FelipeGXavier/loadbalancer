@@ -1,10 +1,32 @@
 package main
 
 import (
+	"fmt"
 	"loadbalancer/loadbalancer"
 	"log"
 	"net/http"
 )
+
+type Wrapper struct {
+	field   int
+	pointer *string
+}
+
+type Struct struct {
+	w Wrapper
+}
+
+func NewWrapper(field int, arg string) Wrapper {
+	return Wrapper{field: field, pointer: &arg}
+}
+
+func GetWrapper(w Wrapper) {
+	fmt.Println(fmt.Sprintf("%p", &w), &w.field, w.pointer)
+}
+
+func GetWrapperWithPointer(w *Wrapper) {
+	fmt.Println(fmt.Sprintf("%p", w), &w.field, w.pointer)
+}
 
 func main() {
 	mux1 := http.NewServeMux()

@@ -54,14 +54,36 @@ func (l *LoadBalancer) Start() {
 	log.Fatal(server.ListenAndServe())
 }
 
+func addressContainsLoopbackWithTargetPort(serverList []string, loadBalancerServerPort int) bool {
+	loopbackAddressWithPort := []string{
+		fmt.Sprintf("localhost:%d", loadBalancerServerPort),
+		fmt.Sprintf("127.0.0.1:%d", loadBalancerServerPort),
+		fmt.Sprintf("0.0.0.0:%d", loadBalancerServerPort),
+	}
+	for _, loopbackAdress := range loopbackAddressWithPort {
+		for _, serverAddress := range serverList {
+			if strings.Contains(serverAddress, loopbackAdress) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port int, options ...LoadBalancerOption) (LoadBalancer, error) {
 	if len(serverList) == 0 {
 		return LoadBalancer{}, errors.New("please provide one or more backends to load balance")
 	}
+
 	loadBalancer := LoadBalancer{}
 	serverPool := serverPool{}
 
 	tokens := strings.Split(serverList, ",")
+
+	if addressContainsLoopbackWithTargetPort(tokens, port) {
+		return LoadBalancer{}, fmt.Errorf("server list must not contain address of the loadbalancer itself :%d", port)
+	}
+
 	for _, tok := range tokens {
 		serverUrl, err := url.Parse(tok)
 		if err != nil {
