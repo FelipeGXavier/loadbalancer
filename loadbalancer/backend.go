@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,10 +20,11 @@ const (
 )
 
 type backend struct {
-	URL          *url.URL
-	Alive        bool
-	mux          sync.RWMutex
-	ReverseProxy *httputil.ReverseProxy
+	URL             *url.URL
+	Alive           bool
+	mux             sync.RWMutex
+	liveConnections atomic.Int64
+	ReverseProxy    *httputil.ReverseProxy
 }
 
 func (b *backend) SetAlive(alive bool) {
@@ -41,6 +43,7 @@ func (b *backend) IsAlive() (alive bool) {
 type serverPool struct {
 	backends []*backend
 	current  uint64
+	mux      *sync.RWMutex
 }
 
 func (s *serverPool) Addbackend(backend *backend) {
@@ -48,7 +51,8 @@ func (s *serverPool) Addbackend(backend *backend) {
 }
 
 func (s *serverPool) NextIndex() int {
-	return int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.backends)))
+	idx := int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.backends)))
+	return idx
 }
 
 func (s *serverPool) MarkbackendStatus(backendUrl *url.URL, alive bool) {
@@ -60,7 +64,18 @@ func (s *serverPool) MarkbackendStatus(backendUrl *url.URL, alive bool) {
 	}
 }
 
-func (s *serverPool) GetNextPeer() *backend {
+func (s *serverPool) GetNextPeer(algorithm LoadBalancerAlgorithm) *backend {
+	switch algorithm {
+	case RoundRobin:
+		return s.roundRobin()
+	case LeastConnection:
+		return s.leastConnections()
+	default:
+		return s.roundRobin()
+	}
+}
+
+func (s *serverPool) roundRobin() *backend {
 	next := s.NextIndex()
 	l := len(s.backends) + next
 	for i := next; i < l; i++ {
@@ -70,6 +85,18 @@ func (s *serverPool) GetNextPeer() *backend {
 				atomic.StoreUint64(&s.current, uint64(idx))
 			}
 			return s.backends[idx]
+		}
+	}
+	return nil
+}
+
+func (s *serverPool) leastConnections() *backend {
+	sort.Slice(s.backends, func(i, j int) bool {
+		return s.backends[i].liveConnections.Load() < s.backends[j].liveConnections.Load()
+	})
+	for _, b := range s.backends {
+		if b.IsAlive() {
+			return b
 		}
 	}
 	return nil

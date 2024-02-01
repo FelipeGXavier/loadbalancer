@@ -1,43 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"loadbalancer/loadbalancer"
 	"log"
 	"net/http"
+	"time"
 )
 
-type Wrapper struct {
-	field   int
-	pointer *string
-}
-
-type Struct struct {
-	w Wrapper
-}
-
-func NewWrapper(field int, arg string) Wrapper {
-	return Wrapper{field: field, pointer: &arg}
-}
-
-func GetWrapper(w Wrapper) {
-	fmt.Println(fmt.Sprintf("%p", &w), &w.field, w.pointer)
-}
-
-func GetWrapperWithPointer(w *Wrapper) {
-	fmt.Println(fmt.Sprintf("%p", w), &w.field, w.pointer)
-}
-
-func main() {
+func stubServers() {
 	mux1 := http.NewServeMux()
 	mux2 := http.NewServeMux()
 
 	mux1.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Second * 5)
 		log.Print("Hit :8081")
 		w.Write([]byte("Pong"))
 	})
 
 	mux2.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Second * 5)
 		log.Print("Hit :8082")
 		w.Write([]byte("Pong"))
 	})
@@ -54,10 +35,15 @@ func main() {
 
 	go s1.ListenAndServe()
 	go s2.ListenAndServe()
+}
+
+func main() {
+
+	stubServers()
 
 	serverList := "http://localhost:8081,http://localhost:8082"
 
-	lb, err := loadbalancer.NewLoadBalancer(serverList, loadbalancer.RoundRobin, 8080)
+	lb, err := loadbalancer.NewLoadBalancer(serverList, loadbalancer.LeastConnection, 8080)
 	if err != nil {
 		log.Fatal(err)
 	}

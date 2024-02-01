@@ -9,6 +9,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -54,33 +55,15 @@ func (l *LoadBalancer) Start() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func addressContainsLoopbackWithTargetPort(serverList []string, loadBalancerServerPort int) bool {
-	loopbackAddressWithPort := []string{
-		fmt.Sprintf("localhost:%d", loadBalancerServerPort),
-		fmt.Sprintf("127.0.0.1:%d", loadBalancerServerPort),
-		fmt.Sprintf("0.0.0.0:%d", loadBalancerServerPort),
-	}
-	for _, loopbackAdress := range loopbackAddressWithPort {
-		for _, serverAddress := range serverList {
-			if strings.Contains(serverAddress, loopbackAdress) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func addressIsHttp(url *url.URL) bool {
-	return url.Scheme == "http" || url.Scheme == "https"
-}
-
 func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port int, options ...LoadBalancerOption) (LoadBalancer, error) {
 	if len(serverList) == 0 {
 		return LoadBalancer{}, errors.New("please provide one or more backends to load balance")
 	}
 
 	loadBalancer := LoadBalancer{}
-	serverPool := serverPool{}
+	serverPool := serverPool{
+		mux: &sync.RWMutex{},
+	}
 
 	tokens := strings.Split(serverList, ",")
 
@@ -100,7 +83,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 		}
 		proxy := httputil.NewSingleHostReverseProxy(serverUrl)
 		proxy.ErrorHandler = func(writer http.ResponseWriter, request *http.Request, e error) {
-			log.Printf("[%s] %s\n", serverUrl.Host, e.Error())
+			log.Printf("proxy error [%s] %s\n", serverUrl.Host, e.Error())
 			retries := getRetryFromContext(request)
 			if retries < 3 {
 				<-time.After(10 * time.Millisecond)
@@ -150,17 +133,39 @@ func (l *LoadBalancer) healthCheck() {
 }
 
 func (l *LoadBalancer) loadBalancerHandler(w http.ResponseWriter, r *http.Request) {
-	log.Print("Hit load balancer server")
 	attempts := getAttemptsFromContext(r)
 	if attempts > 3 {
 		log.Printf("%s(%s) Max attempts reached, terminating\n", r.RemoteAddr, r.URL.Path)
 		http.Error(w, "Service not available", http.StatusServiceUnavailable)
 		return
 	}
-	peer := l.serverPool.GetNextPeer()
+
+	peer := l.serverPool.GetNextPeer(l.algorithm)
 	if peer != nil {
+		peer.liveConnections.Add(1)
+		defer peer.liveConnections.Add(-1)
 		peer.ReverseProxy.ServeHTTP(w, r)
 		return
 	}
 	http.Error(w, "Service not available", http.StatusServiceUnavailable)
+}
+
+func addressContainsLoopbackWithTargetPort(serverList []string, loadBalancerServerPort int) bool {
+	loopbackAddressWithPort := []string{
+		fmt.Sprintf("localhost:%d", loadBalancerServerPort),
+		fmt.Sprintf("127.0.0.1:%d", loadBalancerServerPort),
+		fmt.Sprintf("0.0.0.0:%d", loadBalancerServerPort),
+	}
+	for _, loopbackAdress := range loopbackAddressWithPort {
+		for _, serverAddress := range serverList {
+			if strings.Contains(serverAddress, loopbackAdress) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func addressIsHttp(url *url.URL) bool {
+	return url.Scheme == "http" || url.Scheme == "https"
 }
