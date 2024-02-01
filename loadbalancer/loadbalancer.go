@@ -30,6 +30,7 @@ type LoadBalancer struct {
 	Port            int
 	healthCheckTime int
 	maxConnection   int
+	mutex           sync.Mutex
 }
 
 func WithHealthCheckTime(healthCheckTime int) LoadBalancerOption {
@@ -139,8 +140,9 @@ func (l *LoadBalancer) loadBalancerHandler(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Service not available", http.StatusServiceUnavailable)
 		return
 	}
-
+	l.mutex.Lock()
 	peer := l.serverPool.GetNextPeer(l.algorithm)
+	l.mutex.Unlock()
 	if peer != nil {
 		peer.liveConnections.Add(1)
 		defer peer.liveConnections.Add(-1)
