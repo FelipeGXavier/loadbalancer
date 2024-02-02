@@ -56,9 +56,9 @@ func (l *LoadBalancer) Start() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port int, options ...LoadBalancerOption) (LoadBalancer, error) {
+func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port int, options ...LoadBalancerOption) (*LoadBalancer, error) {
 	if len(serverList) == 0 {
-		return LoadBalancer{}, errors.New("please provide one or more backends to load balance")
+		return &LoadBalancer{}, errors.New("please provide one or more backends to load balance")
 	}
 
 	loadBalancer := LoadBalancer{}
@@ -69,7 +69,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 	tokens := strings.Split(serverList, ",")
 
 	if addressContainsLoopbackWithTargetPort(tokens, port) {
-		return LoadBalancer{}, fmt.Errorf("server list must not contain address of the loadbalancer itself :%d", port)
+		return &LoadBalancer{}, fmt.Errorf("server list must not contain address of the loadbalancer itself :%d", port)
 	}
 
 	for _, tok := range tokens {
@@ -120,7 +120,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 		option(&lb)
 	}
 
-	return lb, nil
+	return &lb, nil
 
 }
 

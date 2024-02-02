@@ -2,6 +2,7 @@ package loadbalancer
 
 import (
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -70,6 +71,8 @@ func (s *serverPool) GetNextPeer(algorithm LoadBalancerAlgorithm) *backend {
 		return s.roundRobin()
 	case LeastConnection:
 		return s.leastConnections()
+	case Random:
+		return s.randomBackend()
 	default:
 		return s.roundRobin()
 	}
@@ -88,6 +91,25 @@ func (s *serverPool) roundRobin() *backend {
 		}
 	}
 	return nil
+}
+
+func (s *serverPool) randomBackend() *backend {
+	copyBackends := make([]*backend, len(s.backends))
+	copy(copyBackends, s.backends)
+	seed := rand.NewSource(time.Now().Unix())
+	for {
+		if len(copyBackends) == 0 {
+			return nil
+		}
+		random := rand.New(seed)
+		next := random.Intn(len(copyBackends))
+		backend := s.backends[next]
+		if backend.IsAlive() {
+			return backend
+		} else {
+			copyBackends = append(copyBackends[:next], copyBackends[next+1:]...)
+		}
+	}
 }
 
 func (s *serverPool) leastConnections() *backend {
