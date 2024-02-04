@@ -1,7 +1,7 @@
 package loadbalancer
 
 import (
-	"log"
+	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type RetrySettings string
@@ -26,6 +28,7 @@ type backend struct {
 	mux             sync.RWMutex
 	liveConnections atomic.Int64
 	ReverseProxy    *httputil.ReverseProxy
+	logger          *zap.Logger
 }
 
 func (b *backend) SetAlive(alive bool) {
@@ -45,6 +48,7 @@ type serverPool struct {
 	backends []*backend
 	current  uint64
 	mux      *sync.RWMutex
+	logger   *zap.Logger
 }
 
 func (s *serverPool) Addbackend(backend *backend) {
@@ -127,12 +131,12 @@ func (s *serverPool) leastConnections() *backend {
 func (s *serverPool) HealthCheck() {
 	for _, b := range s.backends {
 		status := "up"
-		alive := isbackendAlive(b.URL)
+		alive := s.isbackendAlive(b.URL)
 		b.SetAlive(alive)
 		if !alive {
 			status = "down"
 		}
-		log.Printf("%s [%s]\n", b.URL, status)
+		s.logger.Info(fmt.Sprintf("%s [%s]\n", b.URL, status))
 	}
 }
 
@@ -150,11 +154,11 @@ func getRetryFromContext(r *http.Request) int {
 	return 0
 }
 
-func isbackendAlive(u *url.URL) bool {
+func (s *serverPool) isbackendAlive(u *url.URL) bool {
 	timeout := 2 * time.Second
 	conn, err := net.DialTimeout("tcp", u.Host, timeout)
 	if err != nil {
-		log.Println("Site unreachable, error: ", err)
+		s.logger.Warn(fmt.Sprintf("site unreachable, error: ", err))
 		return false
 	}
 	defer conn.Close()
