@@ -158,7 +158,7 @@ func (s *serverPool) isbackendAlive(u *url.URL) bool {
 	timeout := 2 * time.Second
 	conn, err := net.DialTimeout("tcp", u.Host, timeout)
 	if err != nil {
-		s.logger.Warn(fmt.Sprintf("site unreachable, error: ", err))
+		s.logger.Warn(fmt.Sprintf("site unreachable, error: %v", err))
 		return false
 	}
 	defer conn.Close()

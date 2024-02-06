@@ -117,6 +117,10 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 		logger.Info(fmt.Sprintf("configured server %s", serverUrl.Host))
 	}
 
+	if len(serverPool.backends) == 0 {
+		return &LoadBalancer{}, fmt.Errorf("empty server list, must contain at least one valid backend")
+	}
+
 	lb := LoadBalancer{
 		algorithm:       algorithm,
 		serverPool:      &serverPool,
