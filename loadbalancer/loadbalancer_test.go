@@ -2,7 +2,9 @@ package loadbalancer
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -37,6 +39,29 @@ func Test_NewLoadBalancerServerWithNotHttpProtocol_expect_beDroppedFromList(t *t
 	serverPort := 9091
 	serverList := fmt.Sprintf("%s,%s", fmt.Sprintf("ftp://localhost:%d", serverPort), fmt.Sprintf("http://localhost:%d", serverPort))
 	lb, err := NewLoadBalancer(serverList, Random, port)
+	defer lb.Stop()
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(lb.serverPool.backends))
+}
+
+func Test_RequestWithoutAnyServerOnline_expect_returnError503(t *testing.T) {
+	port := 9090
+	serverPort := 9091
+	serverList := fmt.Sprintf("http://localhost:%d", serverPort)
+	lb, err := NewLoadBalancer(serverList, Random, port)
+
+	go func() {
+		lb.Start()
+	}()
+
+	time.Sleep(time.Second * 3)
+
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(lb.serverPool.backends))
+	assert.NotNil(t, lb.serverPool)
+
+	r, err := http.Get(fmt.Sprintf("http://localhost:%d", port) + "/ping")
+
+	assert.Nil(t, err)
+	assert.Equal(t, http.StatusServiceUnavailable, r.StatusCode)
 }

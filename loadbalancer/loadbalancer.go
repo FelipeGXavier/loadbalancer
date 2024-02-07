@@ -59,6 +59,13 @@ func (l *LoadBalancer) Start() {
 	l.logger.Panic("error while start listeing on load balancer server", zap.Error(server.ListenAndServe()))
 }
 
+func (l *LoadBalancer) Stop() {
+	if l.Server != nil {
+		l.logger.Info("stopping load balancer server")
+		defer l.Server.Shutdown(context.Background())
+	}
+}
+
 func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port int, options ...LoadBalancerOption) (*LoadBalancer, error) {
 	if len(serverList) == 0 {
 		return &LoadBalancer{}, errors.New("please provide one or more backends to load balance")
@@ -66,7 +73,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 
 	logger := internal.NewLogger()
 
-	loadBalancer := LoadBalancer{}
+	lb := &LoadBalancer{}
 	serverPool := serverPool{
 		mux:    &sync.RWMutex{},
 		logger: logger,
@@ -104,7 +111,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 			logger.Info(fmt.Sprintf("%s(%s) Attempting retry %d\n", request.RemoteAddr, request.URL.Path, attempts))
 
 			ctx := context.WithValue(request.Context(), Attempts, attempts+1)
-			loadBalancer.loadBalancerHandler(writer, request.WithContext(ctx))
+			lb.loadBalancerHandler(writer, request.WithContext(ctx))
 		}
 
 		serverPool.Addbackend(&backend{
@@ -121,7 +128,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 		return &LoadBalancer{}, fmt.Errorf("empty server list, must contain at least one valid backend")
 	}
 
-	lb := LoadBalancer{
+	lb = &LoadBalancer{
 		algorithm:       algorithm,
 		serverPool:      &serverPool,
 		Port:            port,
@@ -131,10 +138,10 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 	}
 
 	for _, option := range options {
-		option(&lb)
+		option(lb)
 	}
 
-	return &lb, nil
+	return lb, nil
 
 }
 
