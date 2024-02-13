@@ -38,7 +38,7 @@ type LoadBalancer struct {
 
 func WithHealthCheckTime(healthCheckTime int) LoadBalancerOption {
 	return func(lb *LoadBalancer) {
-		lb.healthCheckTime = healthCheckTime
+		lb.healthCheckTime = int(time.Second) * healthCheckTime
 	}
 }
 
@@ -56,13 +56,13 @@ func (l *LoadBalancer) Start() {
 	}
 	l.Server = &server
 	l.logger.Info("starting load balancer server...")
-	l.logger.Panic("error while start listeing on load balancer server", zap.Error(server.ListenAndServe()))
+	l.logger.Error("error while start listeing on load balancer server", zap.Error(server.ListenAndServe()))
 }
 
 func (l *LoadBalancer) Stop() {
 	if l.Server != nil {
 		l.logger.Info("stopping load balancer server")
-		defer l.Server.Shutdown(context.Background())
+		l.Server.Shutdown(context.Background())
 	}
 }
 
@@ -147,6 +147,7 @@ func NewLoadBalancer(serverList string, algorithm LoadBalancerAlgorithm, port in
 
 func (l *LoadBalancer) healthCheck() {
 	t := time.NewTicker(time.Duration(l.healthCheckTime))
+	time.Sleep(time.Duration(l.healthCheckTime))
 	for range t.C {
 		l.logger.Info("starting health check...")
 		l.serverPool.HealthCheck()

@@ -43,7 +43,7 @@ func main() {
 
 	serverList := "http://localhost:8081,http://localhost:8082"
 
-	lb, err := loadbalancer.NewLoadBalancer(serverList, loadbalancer.LeastConnection, 8080)
+	lb, err := loadbalancer.NewLoadBalancer(serverList, loadbalancer.RoundRobin, 8080)
 	if err != nil {
 		log.Fatal(err)
 	}
