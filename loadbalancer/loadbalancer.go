@@ -62,7 +62,10 @@ func (l *LoadBalancer) Start() {
 func (l *LoadBalancer) Stop() {
 	if l.Server != nil {
 		l.logger.Info("stopping load balancer server")
-		l.Server.Shutdown(context.Background())
+		err := l.Server.Shutdown(context.Background())
+		if err != nil {
+			l.logger.Panic("error while stopping the server", zap.Error(err))
+		}
 	}
 }
 

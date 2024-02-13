@@ -2,6 +2,7 @@ package loadbalancer
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"testing"
@@ -148,17 +149,26 @@ func stubServers() []*http.Server {
 
 	mux1.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("hit :9091")
-		w.Write([]byte("Pong"))
+		_, err := w.Write([]byte("Pong"))
+		if err != nil {
+			log.Fatal(err)
+		}
 	})
 
 	mux2.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("hit :9092")
-		w.Write([]byte("Pong"))
+		_, err := w.Write([]byte("Pong"))
+		if err != nil {
+			log.Fatal(err)
+		}
 	})
 
 	mux3.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("hit :9093")
-		w.Write([]byte("Pong"))
+		_, err := w.Write([]byte("Pong"))
+		if err != nil {
+			log.Fatal(err)
+		}
 	})
 
 	s1 := http.Server{
